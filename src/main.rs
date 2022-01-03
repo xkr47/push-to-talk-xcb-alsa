@@ -8,14 +8,13 @@ use std::time::Duration;
 use alsa::Mixer;
 use alsa::mixer::{Selem, SelemChannelId, SelemId};
 use xcb::Connection;
-use xcb::x::Event;
-use xcb::x::GrabMode;
-use xcb::x::ModMask;
-use xcb::x::Screen;
+use xcb::x::{Event, GrabMode, Keycode, ModMask, Screen};
 
 const DEVICE: &str = "default";
 const CONTROL: &str = "Capture";
 const UNMUTE_DELAY_MS: u64 = 150;
+const HOTKEY_MODIFIERS: ModMask = ModMask::N3; // Hyper_L in my setup
+const HOTKEY_KEYCODE: Keycode = 0x3e; // Shift_R
 
 fn main() {
     let expected_capture_state = Arc::new(AtomicBool::new(false));
@@ -114,8 +113,8 @@ fn open_x_and_listen_to_hotkey() -> Result<Connection, Box<dyn Error>> {
     conn.send_request(&xcb::x::GrabKey {
         owner_events: true,
         grab_window: win,
-        modifiers: ModMask::N3,
-        key: 0x3e, // Shift_R
+        modifiers: HOTKEY_MODIFIERS,
+        key: HOTKEY_KEYCODE, // Shift_R
         pointer_mode: GrabMode::Async,
         keyboard_mode: GrabMode::Async,
     });
