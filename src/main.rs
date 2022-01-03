@@ -1,6 +1,7 @@
 use xcb::x::Screen;
 use xcb::x::GrabMode;
 use xcb::x::ModMask;
+use xcb::x::Event;
 
 /*
 amixer -R sget Capture | grep Left: | egrep -o '\bon\b|\boff\b'
@@ -21,15 +22,33 @@ fn main() {
         pointer_mode: GrabMode::Async,
         keyboard_mode: GrabMode::Async,
     });
-    conn.flush();
+    conn.flush().expect("flush failed");
 
     loop {
         let event = conn.wait_for_event();
+        #[allow(unreachable_patterns)]
         let event = match event {
-            Err(e) => { println!("{:#?}", e); break; },
-            Ok(e) => e
+            Err(e) => {
+                println!("Error, exiting — {:#?}", e);
+                break;
+            },
+            Ok(xcb::Event::X(e)) => e,
+            Ok(e) => {
+                println!("Unsupported event, exiting — {:#?}", e);
+                break;
+            },
         };
-        println!("{:#?}", event);
+        match event {
+            Event::KeyPress(event) => {
+                println!("Press {:#?}", event);
+            },
+            Event::KeyRelease(event) => {
+                println!("Release {:#?}", event);
+            },
+            _ => {
+                println!("Unhandled event, ignoring — {:#?}", event);
+            }
+        }
     }
 }
 
