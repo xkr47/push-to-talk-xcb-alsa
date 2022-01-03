@@ -6,7 +6,7 @@ Push-To-Talk using global hotkey in X11, muting/unmuting alsa mixer control
 2. Clone this repo
 
 # Configuring
-Adjust the hardcoded settings in the constants in [src/main.rs](blob/main/src/main.rs) to your liking:
+Adjust the hardcoded settings in the constants in [src/main.rs](src/main.rs) to your liking:
 
 ```rust
 const DEVICE: &str = "default";
