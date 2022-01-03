@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 xcb = "1.0.0-beta.1"
+alsa = "0.6"
