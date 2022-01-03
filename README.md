@@ -1,3 +1,5 @@
+![logo](push-to-talk-xcb-alsa.jpeg)
+
 # push-to-talk-xcb-alsa
 Push-To-Talk using global hotkey in X11, muting/unmuting alsa mixer control
 
@@ -18,3 +20,9 @@ const HOTKEY_KEYCODE: Keycode = 0x3e; // Shift_R
 
 # Running
 4. Run `cargo run --release` in the cloned repo
+
+# Credits
+
+* https://stackoverflow.com/questions/4037230/global-hotkey-with-x11-xlib
+* https://crates.io/crates/xcb
+* https://crates.io/crates/alsa
