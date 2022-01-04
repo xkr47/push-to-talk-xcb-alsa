@@ -18,7 +18,7 @@ const HOTKEY_MODIFIERS: ModMask = ModMask::N3; // Hyper_L in my setup
 const HOTKEY_KEYCODE: Keycode = 62; // Shift_R
 ```
 
-1. The `CONTROL` values can be found out using `amixer controls -D default` where `default` is the alsa device name specified in DEVICE.
+1. The `CONTROL` values can be found out using `amixer scontrols -D default` where `default` is the alsa device name specified in DEVICE:
 ```
 $ amixer scontrols -D default 
 Simple mixer control 'Master',0
