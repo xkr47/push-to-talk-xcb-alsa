@@ -7,7 +7,11 @@ It has been tested to be working well together with [PipeWire](https://pipewire.
 
 # Installing
 1. [Install Rust](https://www.rust-lang.org/)
-2. Clone this repo
+2. Install alsa & xcb development packages
+  * `alsa-lib-devel` and `libxcb-devel` for Fedora-based distributions
+  * `libasound2-dev` and `libxcb-dev` for Debian-based distributions
+3. Clone this repo
+4. In the cloned repo, run `cargo compile --release`
 
 # Configuring
 Adjust the hardcoded settings in the constants in [src/main.rs](src/main.rs) to your liking:
