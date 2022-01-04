@@ -48,10 +48,10 @@ fn enforce_mixer_capture_state(expected_capture_state: Arc<AtomicBool>) -> ! {
     }
 }
 
-fn get_alsa_mixer_capture_elem<'a>(alsa_mixer: &'a Mixer) -> Result<Selem<'a>, Box<dyn Error>> {
+fn get_alsa_mixer_capture_elem(alsa_mixer: &Mixer) -> Result<Selem, Box<dyn Error>> {
     let mixer_capture_elem = alsa_mixer.find_selem(&SelemId::new(CONTROL, 0)).ok_or_else(|| GenericError(format!("Could not find simple control {}", CONTROL)))?;
     if !mixer_capture_elem.has_capture_switch() {
-        Err(GenericError("Capture switch not found, cannot adjust"))?;
+        return Err(GenericError("Capture switch not found, cannot adjust").into());
     }
     Ok(mixer_capture_elem)
 }
@@ -124,7 +124,7 @@ fn open_x_and_listen_to_hotkey() -> Result<Connection, Box<dyn Error>> {
 
 fn set_expected_capture_state(expected_capture_state: &Arc<AtomicBool>, mixer_capture_elem: &Selem, state: bool) {
     expected_capture_state.store(state, Ordering::Release);
-    if let Err(e) = set_capture_state(&mixer_capture_elem, state) {
+    if let Err(e) = set_capture_state(mixer_capture_elem, state) {
         print!("Error setting mixer capture state: {:?}", e);
     }
 }
