@@ -3,7 +3,7 @@
 # push-to-talk-xcb-alsa
 Push-To-Talk using global hotkey in X11, muting/unmuting an [alsa](https://alsa-project.org/) mixer recording control. Unmutes the microphone when you press the configured hotkey (by default Hyper_L + Shift_R) and mutes it back when you release it. It also monitors the muting state and fixes it in case it changes unexpectedly, for example when plugging a headset into your laptop and the headset mute status happens to be wrong.
 
-It has been tested to be working well together with [PipeWire](https://pipewire.org/) / [PulseAudio](https://www.freedesktop.org/wiki/Software/PulseAudio/) at least in Fedora 34, since PipeWire is configured to expose a "PipeWire" alsa device that just does the right thing.
+It has been tested to be working well together with [PipeWire](https://pipewire.org/) / [PulseAudio](https://www.freedesktop.org/wiki/Software/PulseAudio/) at least in Fedora 34, since PipeWire is configured to expose a "PipeWire" alsa device that just does the right thing. Also seems to work on Devuan 3 with PulseAudio.
 
 # Installing
 1. [Install Rust](https://www.rust-lang.org/)
