@@ -49,7 +49,10 @@ KeyPress event, serial 28, synthetic NO, window 0x6400001,
 ➔ the "keycode 62" part is the interesting one for the HOTKEY_KEYCODE
 
 # Running
-Run `cargo run --release` in the cloned repo
+In the cloned repo, run:
+```
+$ cargo run --release
+```
 
 # Credits
 
