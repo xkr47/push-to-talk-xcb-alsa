@@ -57,9 +57,8 @@ fn get_alsa_mixer_capture_elem(alsa_mixer: &Mixer) -> Result<Selem, Box<dyn Erro
 }
 
 fn set_capture_state(mixer_capture_elem: &Selem<'_>, state: bool) -> Result<(), Box<dyn Error>> {
-    let state = if state { 1 } else { 0 };
     for channel in SelemChannelId::all() {
-        mixer_capture_elem.set_capture_switch(*channel, state)?;
+        mixer_capture_elem.set_capture_switch(*channel, state.into())?;
     }
     Ok(())
 }
