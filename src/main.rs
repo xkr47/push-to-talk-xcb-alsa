@@ -8,7 +8,7 @@ use std::time::Duration;
 use alsa::Mixer;
 use alsa::mixer::{Selem, SelemChannelId, SelemId};
 use xcb::Connection;
-use xcb::x::{Event, GrabKey, GrabMode, Keycode, ModMask, Screen};
+use xcb::x::{Event, GrabKey, GrabMode, Keycode, ModMask};
 
 const DEVICE: &str = "default";
 const CONTROL: &str = "Capture";
@@ -105,7 +105,7 @@ fn listen_to_keyboard_events_and_update_mixer(expected_capture_state: Arc<Atomic
 
 fn open_x_and_listen_to_hotkey() -> Result<Connection, Box<dyn Error>> {
     let (conn, screen_num) = xcb::Connection::connect(None)?;
-    let screen: &Screen = conn.get_setup().roots().nth(screen_num as usize).ok_or(GenericError("Could not find screen"))?;
+    let screen = conn.get_setup().roots().nth(screen_num as usize).ok_or(GenericError("Could not find screen"))?;
     let win = screen.root();
 
     let grab_cookie = conn.send_request_checked(&GrabKey {
