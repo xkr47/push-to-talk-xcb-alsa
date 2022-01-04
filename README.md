@@ -19,6 +19,11 @@ const HOTKEY_KEYCODE: Keycode = 62; // Shift_R
 ```
 
 1. The `CONTROL` values can be found out using `amixer controls -D default` where `default` is the alsa device name specified in DEVICE.
+```
+$ amixer scontrols -D default 
+Simple mixer control 'Master',0
+Simple mixer control 'Capture',0
+```
 2. The `UNMUTE_DELAY_MS` is to silence a possible sound created by clicking the hotkey.. but not too much to not mute yourself when you start talking. Unfortunately it is not possible to do the same when releasing the key to mute yourself, so you'll have to be careful not to release it too loudly :)
 3. For `HOTKEY_MODIFIERS`, see [ModMask enum values here](https://rust-x-bindings.github.io/rust-xcb/branches/v1.0-dev/xcb/x/struct.ModMask.html) and your modifier mappings using the `xmodmap` command:
 ```
