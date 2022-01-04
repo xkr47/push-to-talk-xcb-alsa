@@ -108,7 +108,7 @@ fn open_x_and_listen_to_hotkey() -> Result<Connection, Box<dyn Error>> {
     let screen: &Screen = conn.get_setup().roots().nth(screen_num as usize).ok_or(GenericError("Could not find screen"))?;
     let win = screen.root();
 
-    conn.send_request(&GrabKey {
+    let grab_cookie = conn.send_request_checked(&GrabKey {
         owner_events: true,
         grab_window: win,
         modifiers: HOTKEY_MODIFIERS,
@@ -116,7 +116,7 @@ fn open_x_and_listen_to_hotkey() -> Result<Connection, Box<dyn Error>> {
         pointer_mode: GrabMode::Async,
         keyboard_mode: GrabMode::Async,
     });
-    conn.flush()?;
+    conn.check_request(grab_cookie).map_err(|e| GenericError(format!("Failed to grab hotkey: {:?}", e)))?;
     Ok(conn)
 }
 
