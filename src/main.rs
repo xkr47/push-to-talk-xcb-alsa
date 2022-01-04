@@ -8,7 +8,7 @@ use std::time::Duration;
 use alsa::Mixer;
 use alsa::mixer::{Selem, SelemChannelId, SelemId};
 use xcb::Connection;
-use xcb::x::{Event, GrabMode, Keycode, ModMask, Screen};
+use xcb::x::{Event, GrabKey, GrabMode, Keycode, ModMask, Screen};
 
 const DEVICE: &str = "default";
 const CONTROL: &str = "Capture";
@@ -108,11 +108,11 @@ fn open_x_and_listen_to_hotkey() -> Result<Connection, Box<dyn Error>> {
     let screen: &Screen = conn.get_setup().roots().nth(screen_num as usize).ok_or(GenericError("Could not find screen"))?;
     let win = screen.root();
 
-    conn.send_request(&xcb::x::GrabKey {
+    conn.send_request(&GrabKey {
         owner_events: true,
         grab_window: win,
         modifiers: HOTKEY_MODIFIERS,
-        key: HOTKEY_KEYCODE, // Shift_R
+        key: HOTKEY_KEYCODE,
         pointer_mode: GrabMode::Async,
         keyboard_mode: GrabMode::Async,
     });
