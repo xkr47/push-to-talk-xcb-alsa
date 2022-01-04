@@ -18,6 +18,9 @@ const HOTKEY_MODIFIERS: ModMask = ModMask::N3; // Hyper_L in my setup
 const HOTKEY_KEYCODE: Keycode = 0x3e; // Shift_R
 ```
 
+* See [ModMask enum values here](https://rust-x-bindings.github.io/rust-xcb/branches/v1.0-dev/xcb/x/struct.ModMask.html) and your modifier mappings using the `xmodmap` command
+* See Keycodes from e.g. `xev` output
+
 # Running
 4. Run `cargo run --release` in the cloned repo
 
