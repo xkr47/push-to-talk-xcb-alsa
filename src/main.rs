@@ -35,9 +35,9 @@ fn enforce_mixer_capture_state(expected_capture_state: Arc<AtomicBool>) -> ! {
     let alsa_mixer = Mixer::new(DEVICE, false).expect("Failed to setup alsa");
     let mixer_capture_elem = get_alsa_mixer_capture_elem(&alsa_mixer).expect("Failed to find recording channel");
     loop {
-        let capture_enabled = 0 != mixer_capture_elem.get_capture_switch(SelemChannelId::FrontLeft).expect("Could not get capture switch value");
+        let actual = get_unanimous_capture_state(&mixer_capture_elem).expect("Could not get capture switch value");
         let expected = expected_capture_state.load(Ordering::Acquire);
-        if capture_enabled != expected {
+        if actual != Some(expected) {
             println!("Fixing capture state to {}", if expected { "unmuted" } else { "muted" });
             if let Err(e) = set_capture_state(&mixer_capture_elem, expected) {
                 println!("- Error fixing: {:?}", e);
@@ -54,6 +54,18 @@ fn get_alsa_mixer_capture_elem(alsa_mixer: &Mixer) -> Result<Selem, Box<dyn Erro
         return Err(GenericError("Capture switch not found, cannot adjust").into());
     }
     Ok(mixer_capture_elem)
+}
+
+fn get_unanimous_capture_state(mixer_capture_elem: &Selem<'_>) -> Result<Option<bool>, Box<dyn Error>> {
+    let mut channels = SelemChannelId::all().iter();
+    let first_channel_state = 0 != mixer_capture_elem.get_capture_switch(*channels.next().unwrap())?;
+    for channel in channels {
+        let state = 0 != mixer_capture_elem.get_capture_switch(*channel)?;
+        if state != first_channel_state {
+            return Ok(None)
+        }
+    }
+    Ok(Some(first_channel_state))
 }
 
 fn set_capture_state(mixer_capture_elem: &Selem<'_>, state: bool) -> Result<(), Box<dyn Error>> {
