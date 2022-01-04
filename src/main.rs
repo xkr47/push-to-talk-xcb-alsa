@@ -96,9 +96,7 @@ fn listen_to_keyboard_events_and_update_mixer(expected_capture_state: Arc<Atomic
                 println!("Muting");
                 set_expected_capture_state(&expected_capture_state, &mixer_capture_elem, false);
             }
-            _ => {
-                println!("Unhandled event, ignoring — {:#?}", event);
-            }
+            _ => (),
         }
         // just in case they otherwise pile up somewhere
         alsa_mixer.handle_events().expect("alsa_mixer.handle_events() failed");
