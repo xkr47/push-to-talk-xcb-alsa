@@ -258,10 +258,14 @@ fn listen_to_keyboard_events_and_update_mixer(expected_capture_state: Arc<Atomic
     }
 }
 
-fn try_collect_map<K: Debug + Eq + Hash, V: Debug, I: Iterator<Item = (K, V)>>(entries: I) -> Result<HashMap<K, V>, GenericError<&'static str>> {
+fn try_collect_map<K: Debug + Eq + Hash, V: Debug, I: Iterator<Item = (K, V)>>(mut entries: I) -> Result<HashMap<K, V>, GenericError<&'static str>> {
     entries
-        .fold(Some(HashMap::new()), |map, (k, v)| map.and_then(|mut m| if m.insert(k, v).is_none() { Some(m) } else { None }))
-        .ok_or(GenericError("Conflicting keybindings"))
+        .try_fold(HashMap::new(), |mut map, (k, v)|
+            if map.insert(k, v).is_none() {
+                Ok(map)
+            } else {
+                Err(GenericError("Conflicting keybindings"))
+            })
 }
 
 fn from_mod_mask(modifiers: ModMask) -> KeyButMask {
