@@ -2,6 +2,8 @@ use std::{fmt, thread};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Debug, Display};
+use std::hash::Hash;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -10,10 +12,10 @@ use alsa::Mixer;
 use alsa::mixer::{Selem, SelemChannelId, SelemId};
 use clap::Parser;
 use xcb::Connection;
-use xcb::x::{Event, GetModifierMapping, GrabKey, GrabMode, KeyButMask, Keycode, ModMask, Window};
+use xcb::x::{Event, GetKeyboardMapping, GetModifierMapping, GrabKey, GrabMode, KeyButMask, Keycode, Keysym, ModMask, Window};
 
 /// Push to talk using X11 hotkey — uses ALSA but works indirectly also with PulseAudio and PipeWire
-#[derive(Parser, Clone)]
+#[derive(Parser, Clone, Debug)]
 #[clap(author, version, about)]
 struct Args {
     /// alsa device name
@@ -32,17 +34,25 @@ struct Args {
     #[clap(short='m', long, default_value = "mod3", parse(try_from_str = parse_modifiers))]
     push_modifiers: ModMask,
 
-    /// modifiers for hotkey (62 = Left Shift)
-    #[clap(short='k', long, default_value_t = 62)]
+    /// keycode for push hotkey (62 = Left Shift)
+    #[clap(short='c', long, default_value_t = 62, group="push-key")]
     push_keycode: Keycode,
+
+    /// modifiers for push hotkey (62 = Left Shift)
+    #[clap(short='s', long, group="push-key")]
+    push_keysym: Option<String>,
 
     /// modifiers for toggle hotkey, use + for multiple e.g. control+mod3
     #[clap(short='M', long, default_value = "mod3+control", parse(try_from_str = parse_modifiers))]
     toggle_modifiers: ModMask,
 
-    /// modifiers for toggle hotkey (62 = Left Shift, 0 to disable)
-    #[clap(short='K', long, default_value_t = 62)]
+    /// keycode for toggle hotkey (62 = Left Shift, 0 to disable)
+    #[clap(short='C', long, default_value_t = 62, group="toggle-key")]
     toggle_keycode: Keycode,
+
+    /// keysym for toggle hotkey ("Shift_L")
+    #[clap(short='S', long, group="toggle-key")]
+    toggle_keysym: Option<String>,
 }
 
 fn main() {
@@ -58,7 +68,9 @@ fn main() {
         });
     }
 
-    listen_to_keyboard_events_and_update_mixer(expected_capture_state, &args.device, &args.control, args.unmute_delay, args.push_modifiers, args.push_keycode, args.toggle_modifiers, args.toggle_keycode)
+    listen_to_keyboard_events_and_update_mixer(expected_capture_state, &args.device, &args.control, args.unmute_delay,
+                                               args.push_modifiers, args.push_keycode, args.push_keysym,
+                                               args.toggle_modifiers, args.toggle_keycode, args.toggle_keysym)
 }
 
 fn parse_modifiers(str: &str) -> Result<ModMask, &'static str> {
@@ -138,22 +150,40 @@ fn set_capture_state(mixer_capture_elem: &Selem<'_>, state: bool) -> Result<(), 
 // -------------
 
 #[allow(clippy::too_many_arguments)]
-fn listen_to_keyboard_events_and_update_mixer(expected_capture_state: Arc<AtomicBool>, device: &str, control: &str, unmute_delay_ms: u64, push_modifiers: ModMask, push_keycode: Keycode, toggle_modifiers: ModMask, toggle_keycode: Keycode) {
+fn listen_to_keyboard_events_and_update_mixer(expected_capture_state: Arc<AtomicBool>, device: &str, control: &str, unmute_delay_ms: u64, push_modifiers: ModMask, push_keycode: Keycode, push_keysym: Option<String>, toggle_modifiers: ModMask, toggle_keycode: Keycode, toggle_keysym: Option<String>) {
     let alsa_mixer = Mixer::new(device, false).expect("Failed to setup alsa");
     let mixer_capture_elem = get_alsa_mixer_capture_elem(&alsa_mixer, control).expect("Failed to find recording channel");
+    let (x_conn, win) = open_x().expect("Failed to setup X11");
 
-    let x_conn = open_x_and_listen_to_hotkeys(push_modifiers, push_keycode, toggle_modifiers, toggle_keycode).expect("Failed to setup X11");
+    let mut keyboard_mapping = None;
+
+    let push_keycodes = get_keycodes_for_keysym(&x_conn, &mut keyboard_mapping, push_keycode, push_keysym).unwrap();
+    let toggle_keycodes = get_keycodes_for_keysym(&x_conn, &mut keyboard_mapping, toggle_keycode, toggle_keysym).unwrap();
+
+    drop(keyboard_mapping);
+
+    listen_to_hotkey(push_modifiers, &push_keycodes, &x_conn, win).unwrap();
+    listen_to_hotkey(toggle_modifiers, &toggle_keycodes, &x_conn, win).unwrap();
 
     // in case keycode is a modifier we need to have adjusted modifiers for release events
-    let keycode_to_modifier = get_modifier_mapping(&x_conn);
-    let push_release_modifiers = push_modifiers | keycode_to_modifier.get(&push_keycode).cloned().unwrap_or_else(ModMask::empty);
-    let toggle_release_modifiers = toggle_modifiers | keycode_to_modifier.get(&toggle_keycode).cloned().unwrap_or_else(ModMask::empty);
-    drop(keycode_to_modifier);
+    let keycode_to_modifier = get_modifier_mapping(&x_conn).unwrap();
 
-    let push_press_match = (KeyButMask::from_bits_truncate(push_modifiers.bits()), push_keycode);
-    let toggle_press_match = (KeyButMask::from_bits_truncate(toggle_modifiers.bits()), toggle_keycode);
-    let push_release_match = (KeyButMask::from_bits_truncate(push_release_modifiers.bits()), push_keycode);
-    let toggle_release_match = (KeyButMask::from_bits_truncate(toggle_release_modifiers.bits()), toggle_keycode);
+    let push_release_modifiers = push_keycodes.iter().map(|keycode| push_modifiers | keycode_to_modifier.get(keycode).cloned().unwrap_or_else(ModMask::empty));
+    let toggle_release_modifiers = toggle_keycodes.iter().map(|keycode| toggle_modifiers | keycode_to_modifier.get(keycode).cloned().unwrap_or_else(ModMask::empty));
+
+    #[derive(Debug, Clone)]
+    enum KeyAction {
+        Push,
+        Toggle,
+    }
+
+    let push_press_entries = push_keycodes.iter().map(|keycode| ((from_mod_mask(push_modifiers), *keycode), KeyAction::Push));
+    let toggle_press_entries = toggle_keycodes.iter().map(|keycode| ((from_mod_mask(toggle_modifiers), *keycode), KeyAction::Toggle));
+    let push_release_entries = push_keycodes.iter().zip(push_release_modifiers).map(|(keycode, modifiers)| ((from_mod_mask(modifiers), *keycode), KeyAction::Push));
+    let toggle_release_entries = toggle_keycodes.iter().zip(toggle_release_modifiers).map(|(keycode, modifiers)| ((from_mod_mask(modifiers), *keycode), KeyAction::Toggle));
+
+    let press_map = try_collect_map(push_press_entries.chain(toggle_press_entries)).unwrap();
+    let release_map = try_collect_map(push_release_entries.chain(toggle_release_entries)).unwrap();
 
     // don't immediately unmute on release after muting on press
     let mut mute_pending_release = false;
@@ -181,17 +211,19 @@ fn listen_to_keyboard_events_and_update_mixer(expected_capture_state: Arc<Atomic
         };
         match event {
             Event::KeyPress(evt) => {
-                let m = (evt.state(), evt.detail());
-                #[allow(clippy::collapsible_if)]
-                if m == push_press_match {
-                    println!("Unmuting by push-press");
-                    unmute(&expected_capture_state, unmute_delay_ms, &mixer_capture_elem);
-                } else if m == toggle_press_match {
-                    if expected_capture_state.load(Ordering::Acquire) {
-                        println!("Muting by toggle-press");
-                        mute(&expected_capture_state, &mixer_capture_elem);
-                        mute_pending_release = true;
-                    }
+                match press_map.get(&(evt.state(), evt.detail())) {
+                    Some(KeyAction::Push) => {
+                        println!("Unmuting by push-press");
+                        unmute(&expected_capture_state, unmute_delay_ms, &mixer_capture_elem);
+                    },
+                    Some(KeyAction::Toggle) => {
+                        if expected_capture_state.load(Ordering::Acquire) {
+                            println!("Muting by toggle-press");
+                            mute(&expected_capture_state, &mixer_capture_elem);
+                            mute_pending_release = true;
+                        }
+                    },
+                    _ => ()
                 }
             }
             Event::KeyRelease(evt) => {
@@ -203,17 +235,20 @@ fn listen_to_keyboard_events_and_update_mixer(expected_capture_state: Arc<Atomic
                     }
                 }
 
-                let m = (evt.state(), evt.detail());
-                if m == push_release_match {
-                    println!("Muting by push-release");
-                    mute(&expected_capture_state, &mixer_capture_elem);
-                } else if m == toggle_release_match {
-                    if mute_pending_release {
-                        mute_pending_release = false;
-                    } else if !(expected_capture_state.load(Ordering::Acquire)) {
-                        println!("Unmuting by toggle-release");
-                        unmute(&expected_capture_state, unmute_delay_ms, &mixer_capture_elem);
-                    }
+                match release_map.get(&(evt.state(), evt.detail())) {
+                    Some(KeyAction::Push) => {
+                        println!("Muting by push-release");
+                        mute(&expected_capture_state, &mixer_capture_elem);
+                    },
+                    Some(KeyAction::Toggle) => {
+                        if mute_pending_release {
+                            mute_pending_release = false;
+                        } else if !(expected_capture_state.load(Ordering::Acquire)) {
+                            println!("Unmuting by toggle-release");
+                            unmute(&expected_capture_state, unmute_delay_ms, &mixer_capture_elem);
+                        }
+                    },
+                    _ => ()
                 }
             }
             _ => (),
@@ -223,11 +258,43 @@ fn listen_to_keyboard_events_and_update_mixer(expected_capture_state: Arc<Atomic
     }
 }
 
-fn get_modifier_mapping(x_conn: &Connection) -> HashMap<Keycode, ModMask> {
+fn try_collect_map<K: Debug + Eq + Hash, V: Debug, I: Iterator<Item = (K, V)>>(entries: I) -> Result<HashMap<K, V>, GenericError<&'static str>> {
+    entries
+        .fold(Some(HashMap::new()), |map, (k, v)| map.and_then(|mut m| if m.insert(k, v).is_none() { Some(m) } else { None }))
+        .ok_or(GenericError("Conflicting keybindings"))
+}
+
+fn from_mod_mask(modifiers: ModMask) -> KeyButMask {
+    KeyButMask::from_bits_truncate(modifiers.bits())
+}
+
+fn get_keyboard_mapping_reverse(x_conn: &Connection) -> Result<HashMap<Keysym, Vec<Keycode>>, Box<dyn Error>> {
+    let first_keycode = 8;
+    let cookie = x_conn.send_request(&GetKeyboardMapping {
+        first_keycode,
+        count: 248,
+    });
+    let reply = x_conn.wait_for_reply(cookie).map_err(|e| GenericError(format!("Failed to get keyboard mapping: {:?}", e)))?;
+    let mut map: HashMap<Keysym, Vec<Keycode>> = HashMap::new();
+    reply.keysyms()
+        .chunks_exact(reply.keysyms_per_keycode().into())
+        .zip(first_keycode..)
+        .for_each(|(keysyms, keycode)| {
+            let mut keysyms = keysyms.to_vec();
+            keysyms.sort_unstable();
+            keysyms.dedup();
+            keysyms.iter()
+                .filter(|keysym| **keysym != 0)
+                .for_each(|keysym| map.entry(*keysym).or_default().push(keycode))
+        });
+    Ok(map)
+}
+
+fn get_modifier_mapping(x_conn: &Connection) -> Result<HashMap<Keycode, ModMask>, Box<dyn Error>> {
     let cookie = x_conn.send_request(&GetModifierMapping {});
-    let reply = x_conn.wait_for_reply(cookie).map_err(|e| GenericError(format!("Failed to get keyboard mapping: {:?}", e))).unwrap();
+    let reply = x_conn.wait_for_reply(cookie).map_err(|e| GenericError(format!("Failed to get modifier mapping: {:?}", e)))?;
     let keycodes_per_modifier = reply.keycodes().len() / 8;
-    reply.keycodes()
+    Ok(reply.keycodes()
         .chunks_exact(keycodes_per_modifier)
         .zip(&[
             ModMask::SHIFT,
@@ -242,7 +309,7 @@ fn get_modifier_mapping(x_conn: &Connection) -> HashMap<Keycode, ModMask> {
         .flat_map(|(keycodes, mask)| keycodes.iter()
             .filter(|keycode| **keycode != 0)
             .map(|keycode| (*keycode, *mask)))
-        .collect()
+        .collect())
 }
 
 fn mute(expected_capture_state: &Arc<AtomicBool>, mixer_capture_elem: &Selem) {
@@ -254,29 +321,41 @@ fn unmute(expected_capture_state: &Arc<AtomicBool>, unmute_delay_ms: u64, mixer_
     set_expected_capture_state(expected_capture_state, mixer_capture_elem, true);
 }
 
-fn open_x_and_listen_to_hotkeys(push_modifiers: ModMask, push_keycode: Keycode, toggle_modifiers: ModMask, toggle_keycode: Keycode) -> Result<Connection, Box<dyn Error>> {
-    let (conn, screen_num) = xcb::Connection::connect(None)?;
-    let screen = conn.get_setup().roots().nth(screen_num as usize).ok_or(GenericError("Could not find screen"))?;
-    let win = screen.root();
-
-    listen_to_hotkey(push_modifiers, push_keycode, &conn, win)?;
-    if toggle_keycode != 0 {
-        listen_to_hotkey(toggle_modifiers, toggle_keycode, &conn, win)?;
-    }
-    Ok(conn)
+fn open_x() -> Result<(Connection, Window), Box<dyn Error>> {
+    let (x_conn, screen_num) = xcb::Connection::connect(None)?;
+    let screen = x_conn.get_setup().roots().nth(screen_num as usize).ok_or(GenericError("Could not find screen"))?;
+    let root = screen.root();
+    Ok((x_conn, root))
 }
 
-fn listen_to_hotkey(modifiers: ModMask, keycode: Keycode, x_conn: &Connection, win: Window) -> Result<(), Box<dyn Error>> {
-    let grab_cookie = x_conn.send_request_checked(&GrabKey {
+fn get_keycodes_for_keysym(x_conn: &Connection, keyboard_mapping: &mut Option<HashMap<Keysym, Vec<Keycode>>>, keycode: Keycode, keysym: Option<String>) -> Result<Vec<Keycode>, Box<dyn Error>> {
+    if let Some(keysym) = keysym {
+        let keysym = xkb::Keysym::from_str(&keysym).map_err(|_| GenericError(format!("Unknown keysym '{}'", keysym)))?;
+        if keyboard_mapping.is_none() {
+            let map = get_keyboard_mapping_reverse(x_conn)?;
+            *keyboard_mapping = Some(map);
+        }
+        let keyboard_mapping: &HashMap<Keysym, Vec<Keycode>> = keyboard_mapping.as_ref().unwrap();
+        Ok(keyboard_mapping.get(&keysym.into()).ok_or_else(|| GenericError(format!("No keycode bound to keysym '{}'", keysym)))?.to_vec())
+    } else {
+        Ok(vec![keycode])
+    }
+}
+
+fn listen_to_hotkey(modifiers: ModMask, keycodes: &[Keycode], x_conn: &Connection, win: Window) -> Result<(), Box<dyn Error>> {
+    #[allow(clippy::needless_collect)]
+    let grab_cookies = keycodes.iter().map(|keycode| x_conn.send_request_checked(&GrabKey {
         owner_events: true,
         grab_window: win,
         modifiers,
-        key: keycode,
+        key: *keycode,
         pointer_mode: GrabMode::Async,
         keyboard_mode: GrabMode::Async,
-    });
-    x_conn.check_request(grab_cookie).map_err(|e| GenericError(format!("Failed to grab hotkey: {:?}", e)))?;
-    Ok(())
+    })).collect::<Vec<_>>();
+
+    grab_cookies.into_iter()
+        .try_for_each(|cookie|
+            x_conn.check_request(cookie).map_err(|e| GenericError(format!("Failed to grab hotkey: {:?}", e)).into()))
 }
 
 fn set_expected_capture_state(expected_capture_state: &Arc<AtomicBool>, mixer_capture_elem: &Selem, state: bool) {

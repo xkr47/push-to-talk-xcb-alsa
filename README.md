@@ -38,9 +38,11 @@ mod3        Hyper_L (0x42),  Hyper_L (0xcf)
 mod4      
 mod5      
 ```
+The modifiers are in the first column.
+
 ➔ since I want to use `Hyper_L` as modifier, I thus need to use `mod3`. You can combine multiple modifiers by adding `+` between them like `control+shift`. To just use a single dedicated hotkey without modifiers, use `--hotkey_modifiers ""`.
 
-4. For `--hotkey-keycode <keycode>`, see keycodes from e.g. `xev` output and and pressing the key you want to use while pointing at the window:
+4. Easiest is to use `--hotkey-keysym <keysym>` with e.g. `Shift_R` as `<keysym>`. This will enable all keycodes that map to `<keysym>`. For single keycodes use `--hotkey-keycode <keycode>` instead, see keycodes from e.g. `xev` output and and pressing the key you want to use while pointing at the window:
 ```
 $ xev -event keyboard
 KeyPress event, serial 28, synthetic NO, window 0x6400001,
@@ -51,6 +53,12 @@ KeyPress event, serial 28, synthetic NO, window 0x6400001,
     XFilterEvent returns: False
 ```
 ➔ the "keycode 62" part is the interesting one so you should use `--hotkey-keycode 62` in this case. 
+
+## Example
+
+```
+$ cargo run --release -- --push-modifiers shift --push-keysym KP_Enter --toggle-modifiers control+shift --toggle-keysym KP_Enter
+```
 
 # Running
 In the cloned repo, run:
@@ -65,3 +73,4 @@ You can add options to the end of the command if needed. Use `--help` for help.
 * https://stackoverflow.com/questions/4037230/global-hotkey-with-x11-xlib
 * https://crates.io/crates/xcb
 * https://crates.io/crates/alsa
+* https://crates.io/crates/xkb

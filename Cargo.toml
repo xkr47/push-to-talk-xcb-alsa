@@ -8,5 +8,6 @@ authors = [ "Jonas Berlin <xkr47@outerspace.dyndns.org>" ]
 
 [dependencies]
 xcb = "1"
+xkb = "0.2"
 alsa = "0.9"
 clap = { version = "3.0", features = ["derive"] }
