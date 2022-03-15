@@ -6,7 +6,7 @@ use std::hash::Hash;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use alsa::Mixer;
 use alsa::mixer::{Selem, SelemChannelId, SelemId};
@@ -104,9 +104,14 @@ fn parse_modifier(str: &str) -> Result<ModMask, &'static str> {
 // -------------
 
 fn enforce_mixer_capture_state(expected_capture_state: Arc<AtomicBool>, device: &str, control: &str) -> ! {
-    let alsa_mixer = Mixer::new(device, false).expect("Failed to setup alsa");
-    let mixer_capture_elem = get_alsa_mixer_capture_elem(&alsa_mixer, control).expect("Failed to find recording channel");
+    let mut alsa_mixer = Mixer::new(device, false).expect("Failed to setup alsa");
     loop {
+        let result = get_alsa_mixer_capture_elem(&alsa_mixer, control);
+        if result.is_err() {
+            thread::sleep(Duration::from_millis(10));
+            continue;
+        }
+        let mixer_capture_elem = result.expect("Failed to find recording channel");
         let actual = get_unanimous_capture_state(&mixer_capture_elem).expect("Could not get capture switch value");
         let expected = expected_capture_state.load(Ordering::Acquire);
         if actual != Some(expected) {
@@ -115,8 +120,12 @@ fn enforce_mixer_capture_state(expected_capture_state: Arc<AtomicBool>, device: 
                 println!("- Error fixing: {:?}", e);
             }
         }
+        let before = Instant::now();
         alsa_mixer.wait(None).expect("alsa_mixer.wait() failed");
         alsa_mixer.handle_events().expect("alsa_mixer.handle_events() failed");
+        if Instant::now().duration_since(before) > Duration::from_millis(1000) {
+            alsa_mixer = Mixer::new(device, false).expect("Failed to setup alsa");
+        }
     }
 }
 
