@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 use alsa::Mixer;
 use alsa::mixer::{Selem, SelemChannelId, SelemId};
+use chrono::Local;
 use clap::Parser;
 use xcb::Connection;
 use xcb::x::{Event, GetKeyboardMapping, GetModifierMapping, GrabKey, GrabMode, KeyButMask, Keycode, Keysym, ModMask, Window};
@@ -115,9 +116,9 @@ fn enforce_mixer_capture_state(expected_capture_state: Arc<AtomicBool>, device: 
         let actual = get_unanimous_capture_state(&mixer_capture_elem).expect("Could not get capture switch value");
         let expected = expected_capture_state.load(Ordering::Acquire);
         if actual != Some(expected) {
-            println!("Fixing capture state to {}", if expected { "unmuted" } else { "muted" });
+            println!("{} Fixing capture state to {}", log_timestamp(), if expected { "unmuted" } else { "muted" });
             if let Err(e) = set_capture_state(&mixer_capture_elem, expected) {
-                println!("- Error fixing: {:?}", e);
+                println!("{} - Error fixing: {:?}", log_timestamp(), e);
             }
         }
         let before = Instant::now();
@@ -209,12 +210,12 @@ fn listen_to_keyboard_events_and_update_mixer(expected_capture_state: Arc<Atomic
         #[allow(unreachable_patterns)]
             let event = match event {
             Err(e) => {
-                println!("Error, exiting — {:#?}", e);
+                println!("{} Error, exiting — {:#?}", log_timestamp(), e);
                 break;
             }
             Ok(xcb::Event::X(e)) => e,
             Ok(e) => {
-                println!("Unsupported event, exiting — {:#?}", e);
+                println!("{} Unsupported event, exiting — {:#?}", log_timestamp(), e);
                 break;
             }
         };
@@ -222,12 +223,12 @@ fn listen_to_keyboard_events_and_update_mixer(expected_capture_state: Arc<Atomic
             Event::KeyPress(evt) => {
                 match press_map.get(&(evt.state(), evt.detail())) {
                     Some(KeyAction::Push) => {
-                        println!("Unmuting by push-press");
+                        println!("{} Unmuting by push-press", log_timestamp());
                         unmute(&expected_capture_state, unmute_delay_ms, &mixer_capture_elem);
                     },
                     Some(KeyAction::Toggle) => {
                         if expected_capture_state.load(Ordering::Acquire) {
-                            println!("Muting by toggle-press");
+                            println!("{} Muting by toggle-press", log_timestamp());
                             mute(&expected_capture_state, &mixer_capture_elem);
                             mute_pending_release = true;
                         }
@@ -246,14 +247,14 @@ fn listen_to_keyboard_events_and_update_mixer(expected_capture_state: Arc<Atomic
 
                 match release_map.get(&(evt.state(), evt.detail())) {
                     Some(KeyAction::Push) => {
-                        println!("Muting by push-release");
+                        println!("{} Muting by push-release", log_timestamp());
                         mute(&expected_capture_state, &mixer_capture_elem);
                     },
                     Some(KeyAction::Toggle) => {
                         if mute_pending_release {
                             mute_pending_release = false;
                         } else if !(expected_capture_state.load(Ordering::Acquire)) {
-                            println!("Unmuting by toggle-release");
+                            println!("{} Unmuting by toggle-release", log_timestamp());
                             unmute(&expected_capture_state, unmute_delay_ms, &mixer_capture_elem);
                         }
                     },
@@ -374,8 +375,14 @@ fn listen_to_hotkey(modifiers: ModMask, keycodes: &[Keycode], x_conn: &Connectio
 fn set_expected_capture_state(expected_capture_state: &Arc<AtomicBool>, mixer_capture_elem: &Selem, state: bool) {
     expected_capture_state.store(state, Ordering::Release);
     if let Err(e) = set_capture_state(mixer_capture_elem, state) {
-        print!("Error setting mixer capture state: {:?}", e);
+        println!("{} Error setting mixer capture state: {:?}", log_timestamp(), e);
     }
+}
+
+// -------------
+
+fn log_timestamp() -> String {
+    format!("{}", Local::now().format("%Y-%m-%d %H:%M:%S%.3f"))
 }
 
 // -------------
