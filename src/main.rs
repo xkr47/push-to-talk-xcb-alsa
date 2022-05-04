@@ -376,6 +376,7 @@ fn set_expected_capture_state(expected_capture_state: &Arc<AtomicBool>, mixer_ca
     expected_capture_state.store(state, Ordering::Release);
     if let Err(e) = set_capture_state(mixer_capture_elem, state) {
         println!("{} Error setting mixer capture state: {:?}", log_timestamp(), e);
+        panic!("Failure to set mixer caputre state");
     }
 }
 
