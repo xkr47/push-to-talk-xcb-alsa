@@ -10,5 +10,5 @@ authors = [ "Jonas Berlin <xkr47@outerspace.dyndns.org>" ]
 xcb = "1"
 xkb = "0.2"
 alsa = "0.9"
-clap = { version = "3.0", features = ["derive"] }
+clap = { version = "4", features = ["derive"] }
 chrono = "0.4"

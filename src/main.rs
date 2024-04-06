@@ -32,7 +32,7 @@ struct Args {
     unmute_delay: u64,
 
     /// modifiers for push hotkey, use + for multiple e.g. control+mod3
-    #[clap(short='m', long, default_value = "mod3", parse(try_from_str = parse_modifiers))]
+    #[clap(short='m', long, default_value = "mod3", value_parser(parse_modifiers))]
     push_modifiers: ModMask,
 
     /// keycode for push hotkey (62 = Left Shift)
@@ -44,7 +44,7 @@ struct Args {
     push_keysym: Option<String>,
 
     /// modifiers for toggle hotkey, use + for multiple e.g. control+mod3
-    #[clap(short='M', long, default_value = "mod3+control", parse(try_from_str = parse_modifiers))]
+    #[clap(short='M', long, default_value = "mod3+control", value_parser(parse_modifiers))]
     toggle_modifiers: ModMask,
 
     /// keycode for toggle hotkey (62 = Left Shift, 0 to disable)
