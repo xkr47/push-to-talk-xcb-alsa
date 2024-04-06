@@ -78,11 +78,7 @@ fn parse_modifiers(str: &str) -> Result<ModMask, &'static str> {
     if !str.is_empty() {
         str.split('+')
             .map(parse_modifier)
-            .fold(Ok(ModMask::empty()), |acc, x|
-                match acc {
-                    Ok(prev) => x.map(|cur| prev | cur),
-                    Err(e) => Err(e),
-                })
+            .try_fold(ModMask::empty(), |prev, x| x.map(|cur| prev | cur))
     } else {
         Ok(ModMask::empty())
     }
@@ -253,7 +249,7 @@ fn listen_to_keyboard_events_and_update_mixer(expected_capture_state: Arc<Atomic
                     Some(KeyAction::Toggle) => {
                         if mute_pending_release {
                             mute_pending_release = false;
-                        } else if !(expected_capture_state.load(Ordering::Acquire)) {
+                        } else if !expected_capture_state.load(Ordering::Acquire) {
                             println!("{} Unmuting by toggle-release", log_timestamp());
                             unmute(&expected_capture_state, unmute_delay_ms, &mixer_capture_elem);
                         }
@@ -336,7 +332,7 @@ fn unmute(expected_capture_state: &Arc<AtomicBool>, unmute_delay_ms: u64, mixer_
 }
 
 fn open_x() -> Result<(Connection, Window), Box<dyn Error>> {
-    let (x_conn, screen_num) = xcb::Connection::connect(None)?;
+    let (x_conn, screen_num) = Connection::connect(None)?;
     let screen = x_conn.get_setup().roots().nth(screen_num as usize).ok_or(GenericError("Could not find screen"))?;
     let root = screen.root();
     Ok((x_conn, root))
