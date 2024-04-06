@@ -2,9 +2,11 @@
 name = "push-to-talk"
 version = "0.1.0"
 edition = "2021"
+authors = [ "Jonas Berlin <xkr47@outerspace.dyndns.org>" ]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 xcb = "1"
 alsa = "0.9"
+clap = { version = "3.0", features = ["derive"] }

@@ -14,24 +14,17 @@ It has been tested to be working well together with [PipeWire](https://pipewire.
 4. In the cloned repo, run `cargo compile --release`
 
 # Configuring
-Adjust the hardcoded settings in the constants in [src/main.rs](src/main.rs) to your liking:
+Use commandline arguments to adjust which device, mixer control, unmute delay, hotkey etc settings you want to use.
+Run `cargo run --release -- --help` to get a list of available options.
 
-```rust
-const DEVICE: &str = "default";
-const CONTROL: &str = "Capture";
-const UNMUTE_DELAY_MS: u64 = 150;
-const HOTKEY_MODIFIERS: ModMask = ModMask::N3; // Hyper_L in my setup
-const HOTKEY_KEYCODE: Keycode = 62; // Shift_R
-```
-
-1. The `CONTROL` values can be found out using `amixer scontrols -D default` where `default` is the alsa device name specified in DEVICE:
+1. The `--control <control>` values can be found out using `amixer scontrols -D default` where `default` is the alsa device name specified in DEVICE:
 ```
 $ amixer scontrols -D default 
 Simple mixer control 'Master',0
 Simple mixer control 'Capture',0
 ```
-2. The `UNMUTE_DELAY_MS` is to silence a possible sound created by clicking the hotkey.. but not too much to not mute yourself when you start talking. Unfortunately it is not possible to do the same when releasing the key to mute yourself, so you'll have to be careful not to release it too loudly :)
-3. For `HOTKEY_MODIFIERS`, see [ModMask enum values here](https://rust-x-bindings.github.io/rust-xcb/branches/v1.0-dev/xcb/x/struct.ModMask.html) and your modifier mappings using the `xmodmap` command:
+2. The `--unmute-delay <delay>` is to silence a possible sound created by clicking the hotkey.. but not too much to not mute yourself when you start talking. Unfortunately it is not possible to do the same when releasing the key to mute yourself, so you'll have to be careful not to release it too loudly :)
+3. For `--hotkey-modifiers <modifiers>`, see your modifier mappings using the `xmodmap` command:
 ```
 $ xmodmap
 xmodmap:  up to 4 keys per modifier, (keycodes in parentheses):
@@ -45,9 +38,9 @@ mod3        Hyper_L (0x42),  Hyper_L (0xcf)
 mod4      
 mod5      
 ```
-➔ since I want to use `Hyper_L` as modifier, I thus need to use `mod3` which represented by `ModMask::N3`. You can combine multiple modifiers with the `|` operator like `ModMask::CONTROL | ModMask::SHIFT`. To just use a single dedicated hotkey without modifiers, use `ModMask::empty()`.
+➔ since I want to use `Hyper_L` as modifier, I thus need to use `mod3`. You can combine multiple modifiers by adding `+` between them like `control+shift`. To just use a single dedicated hotkey without modifiers, use `--hotkey_modifiers ""`.
 
-4. For `HOTKEY_KEYCODE`, see keycodes from e.g. `xev` output
+4. For `--hotkey-keycode <keycode>`, see keycodes from e.g. `xev` output and and pressing the key you want to use while pointing at the window:
 ```
 $ xev -event keyboard
 KeyPress event, serial 28, synthetic NO, window 0x6400001,
@@ -57,16 +50,18 @@ KeyPress event, serial 28, synthetic NO, window 0x6400001,
     XmbLookupString gives 0 bytes: 
     XFilterEvent returns: False
 ```
-➔ the "keycode 62" part is the interesting one for the HOTKEY_KEYCODE
+➔ the "keycode 62" part is the interesting one so you should use `--hotkey-keycode 62` in this case. 
 
 # Running
 In the cloned repo, run:
 ```
-$ cargo run --release
+$ cargo run --release --
 ```
+
+You can add options to the end of the command if needed. Use `--help` for help.
 
 # Credits
 
-* https://stackoverflow.com/qu7estions/4037230/global-hotkey-with-x11-xlib
+* https://stackoverflow.com/questions/4037230/global-hotkey-with-x11-xlib
 * https://crates.io/crates/xcb
 * https://crates.io/crates/alsa
